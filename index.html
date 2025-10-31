@@ -44,7 +44,7 @@
             <input type="file" id="imageUpload" accept=".jpg,.png" onchange="validateImage(this)">
             <p id="imageError" style="color: red;"></p>
             <canvas id="imageCanvas" style="display: none;"></canvas>
-            <img id="previewImage" style="display: none; max-width: 128px;">
+            <img id="previewImage" style="display: none; width:128px; height:64px;">
         </div>
     </main>
 
@@ -64,29 +64,46 @@
                 return;
             }
 
-            canvas.width = 128;
-            canvas.height = 64;
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            let lines = [];
-            
-            for (let y = 0; y < canvas.height; y++) {
-                let line = '  B'; // Two spaces for indentation
-                for (let x = 0; x < canvas.width; x++) {
-                    const idx = (y * canvas.width + x) * 4;
-                    const brightness = (data[idx] * 0.299 + 
-                                     data[idx + 1] * 0.587 + 
-                                     data[idx + 2] * 0.114);
-                    line += brightness > 128 ? '1' : '0';
+            function processImage() {
+                canvas.width = 128;
+                canvas.height = 64;
+                // draw the image exactly to canvas size
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                const lines = [];
+
+                for (let y = 0; y < canvas.height; y++) {
+                    const bytes = [];
+                    // 128 pixels -> 16 bytes per row
+                    for (let bx = 0; bx < 16; bx++) {
+                        let bits = '';
+                        for (let b = 0; b < 8; b++) {
+                            const x = bx * 8 + b;
+                            const idx = (y * canvas.width + x) * 4;
+                            const brightness = (data[idx] * 0.299 +
+                                                data[idx + 1] * 0.587 +
+                                                data[idx + 2] * 0.114);
+                            bits += brightness > 128 ? '1' : '0';
+                        }
+                        bytes.push('0b' + bits);
+                    }
+                    // join bytes with comma+space, add trailing comma
+                    lines.push('  ' + bytes.join(', ') + ',');
                 }
-                line += ',';
-                lines.push(line);
+
+                outputField.value = '{\n' + lines.join('\n') + '\n};';
             }
 
-            // Format with curly braces
-            outputField.value = '{\n' + lines.join('\n') + '\n};';
+            // Ensure image is loaded before drawing
+            if (!img.complete) {
+                img.onload = processImage;
+            } else {
+                processImage();
+            }
         }
 
         function validateImage(input) {
@@ -104,7 +121,7 @@
                     canvas.width = 128;
                     canvas.height = 64;
 
-                    // Clear canvas
+                    // Clear canvas (use white background)
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
